@@ -7,14 +7,7 @@
 
     <title>Sonic the Hedgehog</title>
 
-    <!-- ORIGINAL FONT CSS -->
     <link type="text/css" rel="stylesheet" href="css/fonts.css" />
-
-    <!-- NEW FONTS.CSS (LOCAL) -->
-    <link rel="stylesheet" href="fonts.css">
-
-    <!-- NEW SAVE SYSTEM -->
-    <script src="save.js"></script>
 
     <style type="text/css">
         html, body {
@@ -35,6 +28,7 @@
             border: 0 none;
             background-color: #000;
             image-rendering: pixelated;
+            image-rendering: crisp-edges;
         }
 
         .spinner {
@@ -79,6 +73,7 @@
             background-color: black;
             color: white;
             font-family: 'Lucida Console', Monaco, monospace;
+            outline: none;
         }
     </style>
 </head>
@@ -90,80 +85,48 @@
     <canvas id="canvas" onclick="window.focus();" oncontextmenu="event.preventDefault();"></canvas>
     <textarea id="output" rows="8"></textarea>
 
+    <script src="save.js"></script>
+
     <script type="text/javascript">
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(err => {
-                console.log('ServiceWorker registration failed:', err);
-            });
+            navigator.serviceWorker.register('sw.js');
         }
 
         var statusElement = document.getElementById('status');
         var progressElement = document.getElementById('progress');
         var spinnerElement = document.getElementById('spinner');
 
-        var Module = {
-            preRun: [],
-            postRun: [],
-            print: (function () {
-                var element = document.getElementById('output');
-                if (element) element.value = '';
-                return function (text) {
-                    console.log(text);
-                    if (element) {
-                        element.value += text + "\n";
-                        element.scrollTop = element.scrollHeight;
-                    }
-                };
-            })(),
-            printErr: function (text) {
-                console.error(text);
-            },
-            canvas: (function () {
-                var canvas = document.getElementById('canvas');
-                canvas.addEventListener("webglcontextlost", function (e) {
-                    alert('WebGL context lost. Reload the page.');
-                    e.preventDefault();
-                }, false);
-                return canvas;
-            })(),
-            setStatus: function (text) {
-                if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
-                if (text === Module.setStatus.last.text) return;
-                var m = text.match(/([^(]+)`\((\d+(\.\d+)?)\/(\d+)\)`/);
-                var now = Date.now();
-                if (m && now - Module.setStatus.last.time < 30) return;
-                Module.setStatus.last.time = now;
-                Module.setStatus.last.text = text;
-                if (m) {
-                    text = m[1];
-                    progressElement.value = parseInt(m[2]) * 100;
-                    progressElement.max = parseInt(m[4]) * 100;
-                    progressElement.hidden = false;
-                    spinnerElement.hidden = false;
-                } else {
-                    progressElement.hidden = true;
-                    if (!text) spinnerElement.style.display = 'none';
-                }
-                statusElement.innerHTML = text;
-            },
-            totalDependencies: 0,
-            monitorRunDependencies: function (left) {
-                this.totalDependencies = Math.max(this.totalDependencies, left);
-                Module.setStatus(left ? 'Preparing... (' +
-                    (this.totalDependencies - left) + '/' + this.totalDependencies + ')' :
-                    'All downloads complete.');
-            }
+        Module.print = function(text) {
+            console.log(text);
         };
 
-        Module.setStatus('Downloading...');
+        Module.printErr = function(text) {
+            console.error(text);
+        };
+
+        Module.canvas = (function () {
+            var canvas = document.getElementById('canvas');
+            canvas.addEventListener("webglcontextlost", function (e) {
+                alert('WebGL context lost. Reload the page.');
+                e.preventDefault();
+            }, false);
+            return canvas;
+        })();
+
+        Module.setStatus = function (text) {
+            if (!text) {
+                spinnerElement.style.display = 'none';
+                return;
+            }
+            statusElement.innerHTML = text;
+        };
+
         window.onerror = function () {
             Module.setStatus('Exception thrown, see console');
             spinnerElement.style.display = 'none';
         };
     </script>
 
-    <!-- GAME -->
-    <script async defer type="text/javascript" src="index.js"></script>
-
+    <script async defer src="index.js"></script>
 </body>
 </html>
