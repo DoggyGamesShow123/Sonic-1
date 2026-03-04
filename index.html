@@ -7,7 +7,14 @@
 
     <title>Sonic the Hedgehog</title>
 
+    <!-- original CSS reference from the fork -->
     <link type="text/css" rel="stylesheet" href="css/fonts.css" />
+
+    <!-- optional local fonts.css if you added one -->
+    <!-- <link rel="stylesheet" href="fonts.css"> -->
+
+    <!-- our save/audio helper (does NOT define Module) -->
+    <script src="save.js"></script>
 
     <style type="text/css">
         html, body {
@@ -27,8 +34,13 @@
             padding: 0;
             border: 0 none;
             background-color: #000;
-            image-rendering: pixelated;
+            -ms-interpolation-mode: nearest-neighbor;
+            image-rendering: optimizeSpeed;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -o-crisp-edges;
             image-rendering: crisp-edges;
+            image-rendering: pixelated;
         }
 
         .spinner {
@@ -69,7 +81,11 @@
             width: 100%;
             height: 200px;
             margin: 10px auto 0;
-            display: none;
+            border-left: 0;
+            border-right: 0;
+            padding-left: 0;
+            padding-right: 0;
+            display: block;
             background-color: black;
             color: white;
             font-family: 'Lucida Console', Monaco, monospace;
@@ -77,56 +93,106 @@
         }
     </style>
 </head>
-
 <body>
     <div class="spinner" id="spinner" style="display: none;"></div>
     <div id="status" style="display: none;">Downloading...</div>
     <progress id="progress" value="0" max="100" hidden="hidden"></progress>
     <canvas id="canvas" onclick="window.focus();" oncontextmenu="event.preventDefault();"></canvas>
-    <textarea id="output" rows="8"></textarea>
-
-    <script src="save.js"></script>
+    <textarea id="output" style="display: none;" rows="8"></textarea>
 
     <script type="text/javascript">
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js');
+            navigator.serviceWorker.register('sw.js').then(function(registration) {
+                registration.addEventListener('updatefound', function() {
+                    var installingWorker = registration.installing;
+                    console.log('A new service worker is being installed:', installingWorker);
+                });
+            }, function(err) {
+                console.log('ServiceWorker registration failed: ', err);
+            });
+        } else {
+            console.log('ServiceWorker not supported');
         }
 
         var statusElement = document.getElementById('status');
         var progressElement = document.getElementById('progress');
         var spinnerElement = document.getElementById('spinner');
 
-        Module.print = function(text) {
-            console.log(text);
-        };
-
-        Module.printErr = function(text) {
-            console.error(text);
-        };
-
-        Module.canvas = (function () {
-            var canvas = document.getElementById('canvas');
-            canvas.addEventListener("webglcontextlost", function (e) {
-                alert('WebGL context lost. Reload the page.');
-                e.preventDefault();
-            }, false);
-            return canvas;
-        })();
-
-        Module.setStatus = function (text) {
-            if (!text) {
-                spinnerElement.style.display = 'none';
-                return;
+        var Module = {
+            preRun: [],
+            postRun: [],
+            print: (function () {
+                var element = document.getElementById('output');
+                if (element) element.value = ''; // clear browser cache
+                return function (text) {
+                    if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+                    console.log(text);
+                    if (element) {
+                        element.value += text + "\n";
+                        element.scrollTop = element.scrollHeight; // focus on bottom
+                    }
+                };
+            })(),
+            printErr: function (text) {
+                if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+                console.error(text);
+            },
+            canvas: (function () {
+                var canvas = document.getElementById('canvas');
+                canvas.addEventListener("webglcontextlost", function (e) {
+                    alert('WebGL context lost. You will need to reload the page.');
+                    e.preventDefault();
+                }, false);
+                return canvas;
+            })(),
+            setStatus: function (text) {
+                if (!Module.setStatus.last) Module.setStatus.last = {time: Date.now(), text: ''};
+                if (text === Module.setStatus.last.text) return;
+                var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+                var now = Date.now();
+                if (m && now - Module.setStatus.last.time < 30) return;
+                Module.setStatus.last.time = now;
+                Module.setStatus.last.text = text;
+                if (m) {
+                    text = m[1];
+                    progressElement.value = parseInt(m[2]) * 100;
+                    progressElement.max = parseInt(m[4]) * 100;
+                    progressElement.hidden = false;
+                    spinnerElement.hidden = false;
+                } else {
+                    progressElement.value = null;
+                    progressElement.max = null;
+                    progressElement.hidden = true;
+                    if (!text) spinnerElement.style.display = 'none';
+                }
+                statusElement.innerHTML = text;
+            },
+            totalDependencies: 0,
+            monitorRunDependencies: function (left) {
+                this.totalDependencies = Math.max(this.totalDependencies, left);
+                Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
             }
-            statusElement.innerHTML = text;
         };
 
+        // ---- hook our save functions into Module AFTER it exists ----
+        if (typeof loadSave === "function" && typeof autoSave === "function") {
+            Module.preRun.push(loadSave);
+            Module.postRun.push(function () {
+                setInterval(autoSave, 5000);
+            });
+        }
+
+        Module.setStatus('Downloading...');
         window.onerror = function () {
-            Module.setStatus('Exception thrown, see console');
+            Module.setStatus('Exception thrown, see JavaScript console');
             spinnerElement.style.display = 'none';
+            Module.setStatus = function (text) {
+                if (text) Module.printErr('[post-exception status] ' + text);
+            };
         };
     </script>
 
-    <script async defer src="index.js"></script>
+    <!-- Emscripten loader from the original project -->
+    <script async="async" defer="defer" type="text/javascript" src="index.js"></script>
 </body>
 </html>
