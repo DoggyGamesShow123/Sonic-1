@@ -1,8 +1,8 @@
-// save.js — Sonic 1 Save + Audio Fix + Black Screen Fix
+// save.js — Sonic 1 Save + Audio Fix
 
 const SAVE_KEY = "sonic1_sram";
 
-// Load save before the game starts
+// Load save before game starts
 function loadSave() {
     try {
         const base64 = localStorage.getItem(SAVE_KEY);
@@ -48,11 +48,15 @@ function resumeAudio() {
 window.addEventListener("click", resumeAudio);
 window.addEventListener("keydown", resumeAudio);
 
-// Main Module object
-var Module = {
-    preRun: [loadSave],
-    postRun: () => setInterval(autoSave, 5000),
-    onRuntimeInitialized: () => {
-        resumeAudio();
-    }
+// Attach hooks to Module
+var Module = window.Module || {};
+
+Module.preRun = Module.preRun || [];
+Module.postRun = Module.postRun || [];
+
+Module.preRun.push(loadSave);
+Module.postRun.push(() => setInterval(autoSave, 5000));
+
+Module.onRuntimeInitialized = () => {
+    resumeAudio();
 };
