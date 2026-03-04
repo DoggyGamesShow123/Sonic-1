@@ -7,11 +7,9 @@
 
     <title>Sonic the Hedgehog</title>
 
-    <!-- Original font CSS (keep if you have css/fonts.css) -->
     <link type="text/css" rel="stylesheet" href="css/fonts.css" />
 
-    <!-- Optional: if you have a separate save.js, it will load here (not required) -->
-    <!-- <script src="save.js"></script> -->
+    <script src="save.js"></script>
 
     <style>
         html, body {
@@ -37,35 +35,22 @@
             font-family: Arial, sans-serif;
             font-size: 14px;
         }
-        #progress {
-            position: absolute;
-            top: 30px;
-            left: 10px;
-            width: 200px;
-        }
     </style>
 </head>
 
 <body>
     <div id="status"></div>
-    <progress id="progress" value="0" max="100" hidden></progress>
     <canvas id="canvas"></canvas>
 
     <script>
         var statusElement = document.getElementById('status');
-        var progressElement = document.getElementById('progress');
 
         var Module = {
             preRun: [],
             postRun: [],
-            print: (function () {
-                return function (text) {
-                    console.log(text);
-                };
-            })(),
-            printErr: function (text) {
-                console.error(text);
-            },
+            print: text => console.log(text),
+            printErr: text => console.error(text),
+
             canvas: (function () {
                 var canvas = document.getElementById('canvas');
                 canvas.addEventListener("webglcontextlost", function (e) {
@@ -74,86 +59,46 @@
                 }, false);
                 return canvas;
             })(),
+
             setStatus: function (text) {
-                if (!text) {
-                    statusElement.textContent = '';
-                    progressElement.hidden = true;
-                    return;
-                }
                 statusElement.textContent = text;
-            },
-            monitorRunDependencies: function (left) {
-                if (left) {
-                    progressElement.hidden = false;
-                    progressElement.value = (this.totalDependencies - left) * 100;
-                    progressElement.max = this.totalDependencies * 100;
-                } else {
-                    progressElement.hidden = true;
-                }
-            },
-            totalDependencies: 0
+            }
         };
 
-        // ---------- IDBFS MOUNT (safe persistent saves) ----------
+        // ---- LOCALSTORAGE SAVE HOOKS ----
         Module.preRun.push(function () {
-            try {
-                FS.mkdir('/home');
-            } catch (e) {}
-            try {
-                FS.mkdir('/home/web_user');
-            } catch (e) {}
-            try {
-                FS.mkdir('/home/web_user/.local');
-            } catch (e) {}
-            try {
-                FS.mkdir('/home/web_user/.local/share');
-            } catch (e) {}
-            try {
-                FS.mkdir('/home/web_user/.local/share/sonic1');
-            } catch (e) {}
-
-            FS.mount(IDBFS, {}, '/home/web_user/.local/share/sonic1');
-
-            FS.syncfs(true, function (err) {
-                console.log('[IDBFS] load', err);
-            });
+            if (typeof loadSave === "function") loadSave();
         });
 
         Module.postRun.push(function () {
-            // Periodically sync to disk
-            setInterval(function () {
-                FS.syncfs(false, function (err) {
-                    if (err) console.error('[IDBFS] save error', err);
-                });
-            }, 5000);
+            if (typeof autoSave === "function") {
+                setInterval(autoSave, 5000);
+            }
         });
 
-        // ---------- AUDIO UNLOCK ----------
+        // ---- AUDIO UNLOCK ----
         function resumeAudio() {
             try {
                 var ctx =
                     (Module && Module.SDL2 && Module.SDL2.audioContext) ||
                     Module.audioContext;
 
-                if (ctx && ctx.state === 'suspended') {
-                    ctx.resume().then(function () {
-                        console.log('[AUDIO] Resumed');
-                    });
+                if (ctx && ctx.state === "suspended") {
+                    ctx.resume().then(() => console.log("[AUDIO] resumed"));
                 }
             } catch (e) {
-                console.log('[AUDIO] resume error', e);
+                console.log("[AUDIO] resume error", e);
             }
         }
 
-        document.addEventListener('click', resumeAudio);
-        document.addEventListener('keydown', resumeAudio);
+        document.addEventListener("click", resumeAudio);
+        document.addEventListener("keydown", resumeAudio);
 
         window.onerror = function () {
-            Module.setStatus('Exception thrown, see console');
+            Module.setStatus("Exception thrown, see console");
         };
     </script>
 
-    <!-- Game loader (this is your index.js) -->
     <script async defer src="index.js"></script>
 </body>
 </html>
