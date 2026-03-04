@@ -1,23 +1,8 @@
-/* fonts.css — simple, safe, compatible */
-
 @font-face {
     font-family: 'SonicFont';
     src: local('Arial');
-    font-weight: normal;
-    font-style: normal;
 }
 
 body {
     margin: 0;
-    padding: 0;
-    font-family: 'SonicFont', Arial, sans-serif;
-    background: black;
-    color: white;
-}
-
-canvas {
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-    display: block;
-    margin: 0 auto;
-}
+    padding
