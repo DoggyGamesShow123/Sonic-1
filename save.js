@@ -1,62 +1,63 @@
-// save.js — Sonic 1 Save + Audio Fix
+// save.js — Sonic 1 WASM: persistent SRAM via localStorage + audio unlock
 
 const SAVE_KEY = "sonic1_sram";
 
-// Load save before game starts
+// Path used by the Sonic 1 WASM port for SRAM
+const SRAM_PATH = "/home/web_user/.local/share/sonic1/sram.bin";
+
+// ---- SAVE / LOAD ----
+
 function loadSave() {
     try {
         const base64 = localStorage.getItem(SAVE_KEY);
-        if (!base64) return;
+        if (!base64) {
+            console.log("[SAVE] No existing save found.");
+            return;
+        }
 
-        const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-        const path = "/home/web_user/.local/share/sonic1/sram.bin";
+        const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 
         FS.mkdirTree("/home/web_user/.local/share/sonic1");
-        FS.writeFile(path, binary, { encoding: "binary" });
+        FS.writeFile(SRAM_PATH, bytes, { encoding: "binary" });
 
-        console.log("[LOAD] Save loaded.");
+        console.log("[SAVE] SRAM loaded from localStorage.");
     } catch (e) {
-        console.error("[LOAD ERROR]", e);
+        console.error("[SAVE] Load error:", e);
     }
 }
 
-// Save every 5 seconds
 function autoSave() {
     try {
-        const path = "/home/web_user/.local/share/sonic1/sram.bin";
-
-        if (FS.analyzePath(path).exists) {
-            const data = FS.readFile(path, { encoding: "binary" });
-            const base64 = btoa(String.fromCharCode(...data));
-            localStorage.setItem(SAVE_KEY, base64);
-            console.log("[SAVE] SRAM saved.");
+        if (!FS.analyzePath(SRAM_PATH).exists) {
+            // Game hasn’t created SRAM yet
+            return;
         }
+
+        const data = FS.readFile(SRAM_PATH, { encoding: "binary" });
+        const base64 = btoa(String.fromCharCode(...data));
+        localStorage.setItem(SAVE_KEY, base64);
+
+        console.log("[SAVE] SRAM saved to localStorage.");
     } catch (e) {
-        console.error("[SAVE ERROR]", e);
+        console.error("[SAVE] Save error:", e);
     }
 }
 
-// Audio unlock
+// ---- AUDIO UNLOCK ----
+
 function resumeAudio() {
-    const ctx = Module['SDL2']?.audioContext;
-    if (ctx && ctx.state === "suspended") {
-        ctx.resume();
-        console.log("[AUDIO] Resumed.");
+    try {
+        const sdl = Module && Module.SDL2;
+        const ctx = sdl && sdl.audioContext;
+        if (ctx && ctx.state === "suspended") {
+            ctx.resume().then(() => {
+                console.log("[AUDIO] Resumed.");
+            });
+        }
+    } catch (e) {
+        console.error("[AUDIO] Resume error:", e);
     }
 }
 
 window.addEventListener("click", resumeAudio);
 window.addEventListener("keydown", resumeAudio);
-
-// Attach hooks to Module
-var Module = window.Module || {};
-
-Module.preRun = Module.preRun || [];
-Module.postRun = Module.postRun || [];
-
-Module.preRun.push(loadSave);
-Module.postRun.push(() => setInterval(autoSave, 5000));
-
-Module.onRuntimeInitialized = () => {
-    resumeAudio();
-};
