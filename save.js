@@ -1,11 +1,8 @@
-// safe Module extension
-var Module = Module || {};
-
-Module.preRun = Module.preRun || [];
-Module.postRun = Module.postRun || [];
+// save.js — Sonic 1 Save + Audio Fix + Black Screen Fix
 
 const SAVE_KEY = "sonic1_sram";
 
+// Load save before the game starts
 function loadSave() {
     try {
         const base64 = localStorage.getItem(SAVE_KEY);
@@ -15,26 +12,47 @@ function loadSave() {
         const path = "/home/web_user/.local/share/sonic1/sram.bin";
 
         FS.mkdirTree("/home/web_user/.local/share/sonic1");
-        FS.writeFile(path, binary);
-        console.log("[SAVE] Loaded SRAM");
+        FS.writeFile(path, binary, { encoding: "binary" });
+
+        console.log("[LOAD] Save loaded.");
     } catch (e) {
-        console.error(e);
+        console.error("[LOAD ERROR]", e);
     }
 }
 
+// Save every 5 seconds
 function autoSave() {
     try {
         const path = "/home/web_user/.local/share/sonic1/sram.bin";
-        if (!FS.analyzePath(path).exists) return;
 
-        const data = FS.readFile(path);
-        const base64 = btoa(String.fromCharCode(...data));
-        localStorage.setItem(SAVE_KEY, base64);
-        console.log("[SAVE] Saved SRAM");
+        if (FS.analyzePath(path).exists) {
+            const data = FS.readFile(path, { encoding: "binary" });
+            const base64 = btoa(String.fromCharCode(...data));
+            localStorage.setItem(SAVE_KEY, base64);
+            console.log("[SAVE] SRAM saved.");
+        }
     } catch (e) {
-        console.error(e);
+        console.error("[SAVE ERROR]", e);
     }
 }
 
-Module.preRun.push(loadSave);
-Module.postRun.push(() => setInterval(autoSave, 5000));
+// Audio unlock
+function resumeAudio() {
+    const ctx = Module['SDL2']?.audioContext;
+    if (ctx && ctx.state === "suspended") {
+        ctx.resume();
+        console.log("[AUDIO] Resumed.");
+    }
+}
+
+window.addEventListener("click", resumeAudio);
+window.addEventListener("keydown", resumeAudio);
+
+// Main Module object
+var Module = {
+    preRun: [loadSave],
+    postRun: () => setInterval(autoSave, 5000),
+    onRuntimeInitialized: () => {
+        resumeAudio();
+    }
+};
