@@ -1,23 +1,10 @@
-// save.js — handles saving Sonic 1 SRAM to localStorage
+// safe Module extension
+var Module = Module || {};
 
-const SAVE_KEY = "sonic1_save_sram";
+Module.preRun = Module.preRun || [];
+Module.postRun = Module.postRun || [];
 
-// Save SRAM every 5 seconds
-function autoSave() {
-    try {
-        // Emscripten FS path where SRAM is stored
-        const path = "/home/web_user/.local/share/sonic1/sram.bin";
-
-        if (FS.analyzePath(path).exists) {
-            const data = FS.readFile(path, { encoding: "binary" });
-            const base64 = btoa(String.fromCharCode(...data));
-            localStorage.setItem(SAVE_KEY, base64);
-            console.log("[SAVE] SRAM saved.");
-        }
-    } catch (e) {
-        console.error("[SAVE ERROR]", e);
-    }
-}
+const SAVE_KEY = "sonic1_sram";
 
 function loadSave() {
     try {
@@ -27,18 +14,27 @@ function loadSave() {
         const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
         const path = "/home/web_user/.local/share/sonic1/sram.bin";
 
-        // Ensure folder exists
         FS.mkdirTree("/home/web_user/.local/share/sonic1");
-
-        FS.writeFile(path, binary, { encoding: "binary" });
-        console.log("[SAVE] SRAM loaded.");
+        FS.writeFile(path, binary);
+        console.log("[SAVE] Loaded SRAM");
     } catch (e) {
-        console.error("[LOAD ERROR]", e);
+        console.error(e);
     }
 }
 
-// Load save on startup
-Module = {
-    preRun: [loadSave],
-    postRun: () => setInterval(autoSave, 5000)
-};
+function autoSave() {
+    try {
+        const path = "/home/web_user/.local/share/sonic1/sram.bin";
+        if (!FS.analyzePath(path).exists) return;
+
+        const data = FS.readFile(path);
+        const base64 = btoa(String.fromCharCode(...data));
+        localStorage.setItem(SAVE_KEY, base64);
+        console.log("[SAVE] Saved SRAM");
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+Module.preRun.push(loadSave);
+Module.postRun.push(() => setInterval(autoSave, 5000));
