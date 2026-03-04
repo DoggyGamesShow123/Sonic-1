@@ -1,63 +1,39 @@
-// save.js — Sonic 1 WASM: persistent SRAM via localStorage + audio unlock
+// save.js — IDBFS persistent save + audio unlock
 
-const SAVE_KEY = "sonic1_sram";
+const SAVE_DIR = "/home/web_user/.local/share/sonic1";
+const SAVE_FILE = SAVE_DIR + "/sram.bin";
 
-// Path used by the Sonic 1 WASM port for SRAM
-const SRAM_PATH = "/home/web_user/.local/share/sonic1/sram.bin";
-
-// ---- SAVE / LOAD ----
-
-function loadSave() {
-    try {
-        const base64 = localStorage.getItem(SAVE_KEY);
-        if (!base64) {
-            console.log("[SAVE] No existing save found.");
-            return;
-        }
-
-        const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-
-        FS.mkdirTree("/home/web_user/.local/share/sonic1");
-        FS.writeFile(SRAM_PATH, bytes, { encoding: "binary" });
-
-        console.log("[SAVE] SRAM loaded from localStorage.");
-    } catch (e) {
-        console.error("[SAVE] Load error:", e);
-    }
-}
-
-function autoSave() {
-    try {
-        if (!FS.analyzePath(SRAM_PATH).exists) {
-            // Game hasn’t created SRAM yet
-            return;
-        }
-
-        const data = FS.readFile(SRAM_PATH, { encoding: "binary" });
-        const base64 = btoa(String.fromCharCode(...data));
-        localStorage.setItem(SAVE_KEY, base64);
-
-        console.log("[SAVE] SRAM saved to localStorage.");
-    } catch (e) {
-        console.error("[SAVE] Save error:", e);
-    }
-}
-
-// ---- AUDIO UNLOCK ----
-
+// AUDIO UNLOCK
 function resumeAudio() {
     try {
-        const sdl = Module && Module.SDL2;
-        const ctx = sdl && sdl.audioContext;
+        const ctx = Module?.SDL2?.audioContext || Module?.audioContext;
         if (ctx && ctx.state === "suspended") {
-            ctx.resume().then(() => {
-                console.log("[AUDIO] Resumed.");
-            });
+            ctx.resume().then(() => console.log("[AUDIO] Resumed"));
         }
     } catch (e) {
-        console.error("[AUDIO] Resume error:", e);
+        console.log("[AUDIO] resume error", e);
     }
 }
 
-window.addEventListener("click", resumeAudio);
-window.addEventListener("keydown", resumeAudio);
+document.addEventListener("click", resumeAudio);
+document.addEventListener("keydown", resumeAudio);
+
+// IDBFS MOUNT + SYNC
+function mountIDBFS() {
+    try {
+        FS.mkdirTree(SAVE_DIR);
+        FS.mount(IDBFS, {}, SAVE_DIR);
+
+        FS.syncfs(true, (err) => {
+            console.log("[IDBFS] Loaded", err);
+        });
+    } catch (e) {
+        console.error("[IDBFS] mount error", e);
+    }
+}
+
+function saveToIDBFS() {
+    FS.syncfs(false, (err) => {
+        console.log("[IDBFS] Saved", err);
+    });
+}
